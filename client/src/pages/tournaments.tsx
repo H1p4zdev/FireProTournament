@@ -1,122 +1,129 @@
-import { FC, useState } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { useLanguage } from "@/hooks/use-language";
-import { useTournaments } from "@/hooks/use-tournament";
-import TournamentCard from "@/components/ui/tournament-card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card } from "@/components/ui/card";
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import TournamentCard from '@/components/tournament-card';
+import { useLanguage } from '@/providers/language-provider';
+import { Tournament } from '@shared/schema';
 
-const TournamentsPage: FC = () => {
+export default function Tournaments() {
   const { t } = useLanguage();
-  const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   
-  // Fetch tournaments with filters
-  const { data: tournaments, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useTournaments({ 
-    type: typeFilter, 
-    status: statusFilter 
+  // Fetch tournaments
+  const { data: tournaments, isLoading } = useQuery<Tournament[]>({
+    queryKey: ['/api/tournaments'],
   });
-
+  
+  const filteredTournaments = tournaments?.filter(tournament => {
+    // Filter by search term
+    const matchesSearch = tournament.title.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Filter by category
+    const matchesCategory = categoryFilter === 'all' || 
+                           (categoryFilter === 'solo' && tournament.tournamentType === 'solo') ||
+                           (categoryFilter === 'duo' && tournament.tournamentType === 'duo') ||
+                           (categoryFilter === 'squad' && tournament.tournamentType === 'squad') ||
+                           (categoryFilter === 'free' && tournament.entryFee === 0) ||
+                           (categoryFilter === 'premium' && tournament.entryFee > 0);
+    
+    return matchesSearch && matchesCategory;
+  });
+  
+  const upcomingTournaments = filteredTournaments?.filter(t => t.status !== 'completed');
+  const pastTournaments = filteredTournaments?.filter(t => t.status === 'completed');
+  
   return (
-    <main className="pt-16 pb-20">
-      <div className="p-4">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold font-poppins">{t("tournaments")}</h2>
-          <div className="flex space-x-2">
-            <Select onValueChange={(value) => setTypeFilter(value === "all" ? undefined : value)}>
-              <SelectTrigger className="w-28 sm:w-32">
-                <SelectValue placeholder={t("allTypes")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("allTypes")}</SelectItem>
-                <SelectItem value="solo">{t("solo")}</SelectItem>
-                <SelectItem value="duo">{t("duo")}</SelectItem>
-                <SelectItem value="squad">{t("squad")}</SelectItem>
-              </SelectContent>
-            </Select>
+    <div className="p-4 space-y-6">
+      {/* Tournament Categories */}
+      <div className="flex items-center space-x-2 overflow-x-auto hide-scrollbar pb-2">
+        <button 
+          onClick={() => setCategoryFilter('all')}
+          className={`${categoryFilter === 'all' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('tournaments.all')}
+        </button>
+        <button 
+          onClick={() => setCategoryFilter('solo')}
+          className={`${categoryFilter === 'solo' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('tournaments.solo')}
+        </button>
+        <button 
+          onClick={() => setCategoryFilter('duo')}
+          className={`${categoryFilter === 'duo' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('tournaments.duo')}
+        </button>
+        <button 
+          onClick={() => setCategoryFilter('squad')}
+          className={`${categoryFilter === 'squad' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('tournaments.squad')}
+        </button>
+        <button 
+          onClick={() => setCategoryFilter('free')}
+          className={`${categoryFilter === 'free' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('tournaments.freeEntry')}
+        </button>
+        <button 
+          onClick={() => setCategoryFilter('premium')}
+          className={`${categoryFilter === 'premium' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('tournaments.premium')}
+        </button>
+      </div>
+      
+      {/* Tournament Search */}
+      <div className="relative">
+        <input 
+          type="text" 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder={t('tournaments.searchPlaceholder')} 
+          className="w-full bg-dark-light border border-gray-700 rounded-lg px-4 py-2 pl-10 focus:outline-none focus:border-primary"
+        />
+        <i className="ri-search-line absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+      </div>
+      
+      {/* Tournament Listings */}
+      <div className="space-y-4">
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          <>
+            <h3 className="text-lg font-bold font-heading">{t('tournaments.upcomingTournaments')}</h3>
             
-            <Select onValueChange={(value) => setStatusFilter(value === "all" ? undefined : value)}>
-              <SelectTrigger className="w-28 sm:w-32">
-                <SelectValue placeholder={t("allStatus")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("allStatus")}</SelectItem>
-                <SelectItem value="live">{t("live")}</SelectItem>
-                <SelectItem value="upcoming">{t("upcoming")}</SelectItem>
-                <SelectItem value="completed">{t("completed")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        
-        <div className="space-y-4">
-          {isLoading ? (
-            // Loading skeletons
-            Array.from({ length: 3 }).map((_, index) => (
-              <Card key={index} className="w-full overflow-hidden">
-                <div className="flex flex-col sm:flex-row">
-                  <Skeleton className="w-full sm:w-32 h-32" />
-                  <div className="p-3 flex-grow">
-                    <Skeleton className="h-4 w-20 mb-2" />
-                    <Skeleton className="h-4 w-32 mb-4" />
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      <Skeleton className="h-4 w-16" />
-                      <Skeleton className="h-4 w-16" />
-                      <Skeleton className="h-4 w-16" />
-                    </div>
-                    <div className="flex justify-between">
-                      <Skeleton className="h-12 w-16" />
-                      <Skeleton className="h-12 w-16" />
-                      <Skeleton className="h-12 w-24" />
-                      <Skeleton className="h-8 w-16" />
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))
-          ) : tournaments && tournaments.length > 0 ? (
-            tournaments.map((tournament) => (
-              <TournamentCard 
-                key={tournament.id} 
-                tournament={tournament} 
-                variant="horizontal"
-              />
-            ))
-          ) : (
-            <div className="flex flex-col items-center justify-center w-full py-10 text-muted-foreground">
-              <i className="ri-trophy-line text-4xl mb-2"></i>
-              <p>{t("noTournamentsFound")}</p>
-            </div>
-          )}
-        </div>
-        
-        {(tournaments && tournaments.length > 0 && hasNextPage) && (
-          <div className="mt-6 flex justify-center">
-            <Button 
-              variant="outline" 
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="flex items-center justify-center space-x-2"
-            >
-              {isFetchingNextPage ? t("loading") : (
-                <>
-                  <span>{t("loadMore")}</span>
-                  <i className="ri-arrow-down-line"></i>
-                </>
-              )}
-            </Button>
-          </div>
+            {upcomingTournaments && upcomingTournaments.length > 0 ? (
+              <div className="space-y-4">
+                {upcomingTournaments.map(tournament => (
+                  <TournamentCard key={tournament.id} tournament={tournament} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-gray-400">
+                {t('common.noUpcomingTournaments')}
+              </div>
+            )}
+            
+            <h3 className="text-lg font-bold font-heading mt-6">{t('tournaments.pastTournaments')}</h3>
+            
+            {pastTournaments && pastTournaments.length > 0 ? (
+              <div className="space-y-4">
+                {pastTournaments.map(tournament => (
+                  <TournamentCard key={tournament.id} tournament={tournament} isPast={true} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-gray-400">
+                {t('common.noPastTournaments')}
+              </div>
+            )}
+          </>
         )}
       </div>
-    </main>
+    </div>
   );
-};
-
-export default TournamentsPage;
+}

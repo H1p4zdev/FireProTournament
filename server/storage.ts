@@ -1,408 +1,407 @@
-import {
+import { 
   users, type User, type InsertUser,
   tournaments, type Tournament, type InsertTournament,
   teams, type Team, type InsertTeam,
-  teamMembers, type TeamMember, type InsertTeamMember,
-  transactions, type Transaction, type InsertTransaction
+  transactions, type Transaction, type InsertTransaction,
+  leaderboard, type LeaderboardEntry, type InsertLeaderboardEntry
 } from "@shared/schema";
 
+// Define the storage interface
 export interface IStorage {
-  // Users
+  // User operations
   getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  getUserByMobile(mobileNumber: string): Promise<User | undefined>;
-  getUserByFreeFireUid(uid: string): Promise<User | undefined>;
+  getUserByPhoneNumber(phoneNumber: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUserWallet(userId: number, amount: number): Promise<User>;
+  updateUserBalance(userId: number, amount: number): Promise<User | undefined>;
   
-  // Tournaments
-  getTournaments(filter?: { status?: string, type?: string }): Promise<Tournament[]>;
+  // Tournament operations
   getTournament(id: number): Promise<Tournament | undefined>;
+  getTournaments(filter?: Partial<{ status: string, tournamentType: string }>): Promise<Tournament[]>;
   createTournament(tournament: InsertTournament): Promise<Tournament>;
-  updateTournament(id: number, data: Partial<Tournament>): Promise<Tournament | undefined>;
+  updateTournamentStatus(id: number, status: string): Promise<Tournament | undefined>;
+  incrementRegisteredTeams(id: number): Promise<Tournament | undefined>;
   
-  // Teams
-  getTeams(tournamentId: number): Promise<Team[]>;
+  // Team operations
   getTeam(id: number): Promise<Team | undefined>;
+  getTeamsByTournament(tournamentId: number): Promise<Team[]>;
+  getTeamsByCaptain(captainId: number): Promise<Team[]>;
   createTeam(team: InsertTeam): Promise<Team>;
-  getTeamMembers(teamId: number): Promise<TeamMember[]>;
-  addTeamMember(teamMember: InsertTeamMember): Promise<TeamMember>;
   
-  // Transactions
+  // Transaction operations
+  getTransaction(id: number): Promise<Transaction | undefined>;
+  getTransactionsByUser(userId: number): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
-  getTransactions(userId: number): Promise<Transaction[]>;
   
-  // Leaderboard
-  getTopPlayers(limit: number): Promise<User[]>;
+  // Leaderboard operations
+  getLeaderboardEntry(userId: number): Promise<LeaderboardEntry | undefined>;
+  getLeaderboard(type?: string): Promise<LeaderboardEntry[]>;
+  createOrUpdateLeaderboardEntry(entry: InsertLeaderboardEntry): Promise<LeaderboardEntry>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private tournaments: Map<number, Tournament>;
   private teams: Map<number, Team>;
-  private teamMembers: Map<number, TeamMember>;
   private transactions: Map<number, Transaction>;
+  private leaderboardEntries: Map<number, LeaderboardEntry>;
   
-  private userId = 1;
-  private tournamentId = 1;
-  private teamId = 1;
-  private teamMemberId = 1;
-  private transactionId = 1;
-
+  // ID counters
+  private userIdCounter: number;
+  private tournamentIdCounter: number;
+  private teamIdCounter: number;
+  private transactionIdCounter: number;
+  private leaderboardIdCounter: number;
+  
   constructor() {
     this.users = new Map();
     this.tournaments = new Map();
     this.teams = new Map();
-    this.teamMembers = new Map();
     this.transactions = new Map();
+    this.leaderboardEntries = new Map();
     
-    // Seed some initial users for demo purposes
-    try {
-      this.seedInitialData();
-    } catch (error) {
-      console.error("Failed to seed initial data:", error);
-    }
+    this.userIdCounter = 1;
+    this.tournamentIdCounter = 1;
+    this.teamIdCounter = 1;
+    this.transactionIdCounter = 1;
+    this.leaderboardIdCounter = 1;
+    
+    // Add some initial data for dev purposes
+    this.initializeDemoData();
   }
-
-  private async seedInitialData() {
-    try {
-      // Directly insert users instead of using createUser to avoid the updateWallet race condition
-      const user1: User = {
-        id: this.userId++,
-        username: "fireking92",
-        password: "password123",
-        displayName: "FireKing92",
-        avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d",
-        freeFireUid: "123456789",
-        mobileNumber: "01711111111",
-        walletBalance: 500,
-        createdAt: new Date()
-      };
-      this.users.set(user1.id, user1);
-      
-      const user2: User = {
-        id: this.userId++,
-        username: "headhunterbd",
-        password: "password123",
-        displayName: "HeadHunterBD",
-        avatar: "https://images.unsplash.com/photo-1552374196-c4e7ffc6e126",
-        freeFireUid: "987654321",
-        mobileNumber: "01722222222",
-        walletBalance: 300,
-        createdAt: new Date()
-      };
-      this.users.set(user2.id, user2);
-      
-      const user3: User = {
-        id: this.userId++,
-        username: "queenSniper",
-        password: "password123",
-        displayName: "QueenSniper",
-        avatar: "https://images.unsplash.com/photo-1567784177951-6fa58317e16b",
-        freeFireUid: "456789123",
-        mobileNumber: "01733333333",
-        walletBalance: 200,
-        createdAt: new Date()
-      };
-      this.users.set(user3.id, user3);
-      
-      // Add some sample tournaments - directly adding to avoid async issues
-      const t1: Tournament = {
-        id: this.tournamentId++,
-        name: "Weekend Warrior Cup",
-        description: "Join this exciting weekend tournament to compete against the best Free Fire players in Bangladesh! Top 3 teams will receive cash prizes.",
-        type: "squad",
-        gameMode: "battle-royale",
-        map: "Bermuda",
-        entryFee: 100,
-        prizePool: 10000,
-        maxTeams: 100,
-        registeredTeams: 0,
-        startTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-        visibility: "public",
-        status: "upcoming",
-        createdBy: user1.id,
-        prizes: [
-          { position: 1, amount: 5000 },
-          { position: 2, amount: 3000 },
-          { position: 3, amount: 2000 }
-        ],
-        rules: "All players must be registered with valid Free Fire ID. Teams must consist of 4 players. Map: Bermuda. Cheating will result in disqualification.",
-        createdAt: new Date()
-      };
-      this.tournaments.set(t1.id, t1);
-
-      const t2: Tournament = {
-        id: this.tournamentId++,
-        name: "Squad Battle",
-        description: "Intense squad battle for the best teams in Bangladesh.",
-        type: "squad",
-        gameMode: "battle-royale",
-        map: "Bermuda",
-        entryFee: 100,
-        prizePool: 8000,
-        maxTeams: 100,
-        registeredTeams: 0,
-        startTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // Already started
-        visibility: "public",
-        status: "live",
-        createdBy: user2.id,
-        prizes: [
-          { position: 1, amount: 4000 },
-          { position: 2, amount: 2500 },
-          { position: 3, amount: 1500 }
-        ],
-        rules: "Standard battle royale rules apply.",
-        createdAt: new Date()
-      };
-      this.tournaments.set(t2.id, t2);
-
-      const t3: Tournament = {
-        id: this.tournamentId++,
-        name: "Duo Clash",
-        description: "Find a partner and join this exciting duo tournament.",
-        type: "duo",
-        gameMode: "battle-royale",
-        map: "Kalahari",
-        entryFee: 50,
-        prizePool: 5000,
-        maxTeams: 50,
-        registeredTeams: 0,
-        startTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // Already started
-        visibility: "public",
-        status: "live",
-        createdBy: user3.id,
-        prizes: [
-          { position: 1, amount: 2500 },
-          { position: 2, amount: 1500 },
-          { position: 3, amount: 1000 }
-        ],
-        rules: "Duo teams only. Map: Kalahari.",
-        createdAt: new Date()
-      };
-      this.tournaments.set(t3.id, t3);
-
-      const t4: Tournament = {
-        id: this.tournamentId++,
-        name: "Solo Showdown",
-        description: "Show your individual skills in this solo tournament.",
-        type: "solo",
-        gameMode: "battle-royale",
-        map: "Purgatory",
-        entryFee: 30,
-        prizePool: 3000,
-        maxTeams: 100,
-        registeredTeams: 0,
-        startTime: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // Already started
-        visibility: "public",
-        status: "live",
-        createdBy: user1.id,
-        prizes: [
-          { position: 1, amount: 1500 },
-          { position: 2, amount: 1000 },
-          { position: 3, amount: 500 }
-        ],
-        rules: "Solo players only. Map: Purgatory.",
-        createdAt: new Date()
-      };
-      this.tournaments.set(t4.id, t4);
-      
-      // Add some sample transactions - direct add without using wallet update
-      const transaction1: Transaction = {
-        id: this.transactionId++,
-        userId: user1.id,
-        amount: 500,
-        type: "deposit",
-        status: "completed",
-        paymentMethod: "bKash",
-        reference: "Initial deposit",
-        createdAt: new Date()
-      };
-      this.transactions.set(transaction1.id, transaction1);
-      
-      const transaction2: Transaction = {
-        id: this.transactionId++,
-        userId: user2.id,
-        amount: 300,
-        type: "deposit",
-        status: "completed",
-        paymentMethod: "Nagad",
-        reference: "Initial deposit",
-        createdAt: new Date()
-      };
-      this.transactions.set(transaction2.id, transaction2);
-      
-      const transaction3: Transaction = {
-        id: this.transactionId++,
-        userId: user3.id,
-        amount: 200,
-        type: "deposit",
-        status: "completed",
-        paymentMethod: "Rocket",
-        reference: "Initial deposit",
-        createdAt: new Date()
-      };
-      this.transactions.set(transaction3.id, transaction3);
-    } catch (error) {
-      console.error("Error seeding initial data:", error);
-    }
-  }
-
-  // Users
+  
+  // User operations
   async getUser(id: number): Promise<User | undefined> {
     return this.users.get(id);
   }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username.toLowerCase() === username.toLowerCase()
-    );
+  
+  async getUserByPhoneNumber(phoneNumber: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(user => user.phoneNumber === phoneNumber);
   }
-
-  async getUserByMobile(mobileNumber: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.mobileNumber === mobileNumber
-    );
-  }
-
-  async getUserByFreeFireUid(uid: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.freeFireUid === uid
-    );
-  }
-
-  async createUser(userData: InsertUser): Promise<User> {
-    const id = this.userId++;
-    const createdAt = new Date();
-    const user: User = { ...userData, id, createdAt };
+  
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = this.userIdCounter++;
+    const now = new Date();
+    const user: User = { 
+      ...insertUser, 
+      id, 
+      balance: 250, // Give new users some initial balance
+      createdAt: now,
+      lastLogin: now 
+    };
     this.users.set(id, user);
+    
+    // Create initial leaderboard entry
+    await this.createOrUpdateLeaderboardEntry({
+      userId: id,
+      points: 0,
+      wins: 0,
+      totalTournaments: 0,
+      weeklyPoints: 0,
+      monthlyPoints: 0
+    });
+    
     return user;
   }
-
-  async updateUserWallet(userId: number, amount: number): Promise<User> {
-    const user = this.users.get(userId);
-    if (!user) throw new Error("User not found");
+  
+  async updateUserBalance(userId: number, amount: number): Promise<User | undefined> {
+    const user = await this.getUser(userId);
+    if (!user) return undefined;
     
-    const updatedUser = {
-      ...user,
-      walletBalance: user.walletBalance + amount
+    const updatedUser = { 
+      ...user, 
+      balance: user.balance + amount 
     };
     this.users.set(userId, updatedUser);
     return updatedUser;
   }
-
-  // Tournaments
-  async getTournaments(filter?: { status?: string, type?: string }): Promise<Tournament[]> {
+  
+  // Tournament operations
+  async getTournament(id: number): Promise<Tournament | undefined> {
+    return this.tournaments.get(id);
+  }
+  
+  async getTournaments(filter?: Partial<{ status: string, tournamentType: string }>): Promise<Tournament[]> {
     let tournaments = Array.from(this.tournaments.values());
     
     if (filter) {
       if (filter.status) {
         tournaments = tournaments.filter(t => t.status === filter.status);
       }
-      if (filter.type) {
-        tournaments = tournaments.filter(t => t.type === filter.type);
+      if (filter.tournamentType) {
+        tournaments = tournaments.filter(t => t.tournamentType === filter.tournamentType);
       }
     }
     
-    return tournaments.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    // Sort by start time (most recent first)
+    return tournaments.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }
-
-  async getTournament(id: number): Promise<Tournament | undefined> {
-    return this.tournaments.get(id);
-  }
-
-  async createTournament(tournamentData: InsertTournament): Promise<Tournament> {
-    const id = this.tournamentId++;
-    const createdAt = new Date();
-    const registeredTeams = 0;
-    const tournament: Tournament = { ...tournamentData, id, registeredTeams, createdAt };
+  
+  async createTournament(insertTournament: InsertTournament): Promise<Tournament> {
+    const id = this.tournamentIdCounter++;
+    const tournament: Tournament = {
+      ...insertTournament,
+      id,
+      registeredTeams: 0,
+      createdAt: new Date()
+    };
     this.tournaments.set(id, tournament);
     return tournament;
   }
-
-  async updateTournament(id: number, data: Partial<Tournament>): Promise<Tournament | undefined> {
-    const tournament = this.tournaments.get(id);
+  
+  async updateTournamentStatus(id: number, status: string): Promise<Tournament | undefined> {
+    const tournament = await this.getTournament(id);
     if (!tournament) return undefined;
     
-    const updatedTournament = { ...tournament, ...data };
+    const updatedTournament = {
+      ...tournament,
+      status
+    };
     this.tournaments.set(id, updatedTournament);
     return updatedTournament;
   }
-
-  // Teams
-  async getTeams(tournamentId: number): Promise<Team[]> {
-    return Array.from(this.teams.values()).filter(
-      (team) => team.tournamentId === tournamentId
-    );
+  
+  async incrementRegisteredTeams(id: number): Promise<Tournament | undefined> {
+    const tournament = await this.getTournament(id);
+    if (!tournament) return undefined;
+    
+    const updatedTournament = {
+      ...tournament,
+      registeredTeams: tournament.registeredTeams + 1
+    };
+    this.tournaments.set(id, updatedTournament);
+    return updatedTournament;
   }
-
+  
+  // Team operations
   async getTeam(id: number): Promise<Team | undefined> {
     return this.teams.get(id);
   }
-
-  async createTeam(teamData: InsertTeam): Promise<Team> {
-    const id = this.teamId++;
-    const createdAt = new Date();
-    const team: Team = { ...teamData, id, createdAt };
+  
+  async getTeamsByTournament(tournamentId: number): Promise<Team[]> {
+    return Array.from(this.teams.values())
+      .filter(team => team.tournamentId === tournamentId);
+  }
+  
+  async getTeamsByCaptain(captainId: number): Promise<Team[]> {
+    return Array.from(this.teams.values())
+      .filter(team => team.captainId === captainId);
+  }
+  
+  async createTeam(insertTeam: InsertTeam): Promise<Team> {
+    const id = this.teamIdCounter++;
+    const team: Team = {
+      ...insertTeam,
+      id,
+      createdAt: new Date()
+    };
     this.teams.set(id, team);
     
-    // Update tournament registered teams count
-    const tournament = this.tournaments.get(teamData.tournamentId);
-    if (tournament) {
-      const updatedTournament = {
-        ...tournament,
-        registeredTeams: tournament.registeredTeams + 1
-      };
-      this.tournaments.set(tournament.id, updatedTournament);
-    }
+    // Increment registered teams in tournament
+    await this.incrementRegisteredTeams(insertTeam.tournamentId);
     
     return team;
   }
-
-  async getTeamMembers(teamId: number): Promise<TeamMember[]> {
-    return Array.from(this.teamMembers.values()).filter(
-      (member) => member.teamId === teamId
-    );
+  
+  // Transaction operations
+  async getTransaction(id: number): Promise<Transaction | undefined> {
+    return this.transactions.get(id);
   }
-
-  async addTeamMember(teamMemberData: InsertTeamMember): Promise<TeamMember> {
-    const id = this.teamMemberId++;
-    const createdAt = new Date();
-    const teamMember: TeamMember = { ...teamMemberData, id, createdAt };
-    this.teamMembers.set(id, teamMember);
-    return teamMember;
+  
+  async getTransactionsByUser(userId: number): Promise<Transaction[]> {
+    return Array.from(this.transactions.values())
+      .filter(tx => tx.userId === userId)
+      // Sort by most recent first
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
-
-  // Transactions
-  async createTransaction(transactionData: InsertTransaction): Promise<Transaction> {
-    const id = this.transactionId++;
-    const createdAt = new Date();
-    const transaction: Transaction = { ...transactionData, id, createdAt };
+  
+  async createTransaction(insertTransaction: InsertTransaction): Promise<Transaction> {
+    const id = this.transactionIdCounter++;
+    const transaction: Transaction = {
+      ...insertTransaction,
+      id,
+      createdAt: new Date()
+    };
     this.transactions.set(id, transaction);
     
-    // Update user's wallet balance
-    if (transaction.status === "completed") {
-      let amount = transaction.amount;
-      if (transaction.type === "withdrawal" || transaction.type === "tournament_entry") {
-        amount = -amount; // Deduct for withdrawals and tournament entries
-      }
-      await this.updateUserWallet(transaction.userId, amount);
+    // Update user balance for completed transactions
+    if (transaction.status === 'completed') {
+      await this.updateUserBalance(transaction.userId, transaction.amount);
     }
     
     return transaction;
   }
-
-  async getTransactions(userId: number): Promise<Transaction[]> {
-    return Array.from(this.transactions.values())
-      .filter(transaction => transaction.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  
+  // Leaderboard operations
+  async getLeaderboardEntry(userId: number): Promise<LeaderboardEntry | undefined> {
+    return Array.from(this.leaderboardEntries.values())
+      .find(entry => entry.userId === userId);
   }
-
-  // Leaderboard
-  async getTopPlayers(limit: number): Promise<User[]> {
-    return Array.from(this.users.values())
-      .sort((a, b) => b.walletBalance - a.walletBalance)
-      .slice(0, limit);
+  
+  async getLeaderboard(type: string = 'overall'): Promise<LeaderboardEntry[]> {
+    let entries = Array.from(this.leaderboardEntries.values());
+    
+    // Sort based on the type
+    if (type === 'weekly') {
+      entries.sort((a, b) => b.weeklyPoints - a.weeklyPoints);
+    } else if (type === 'monthly') {
+      entries.sort((a, b) => b.monthlyPoints - a.monthlyPoints);
+    } else {
+      entries.sort((a, b) => b.points - a.points);
+    }
+    
+    return entries;
+  }
+  
+  async createOrUpdateLeaderboardEntry(insertEntry: InsertLeaderboardEntry): Promise<LeaderboardEntry> {
+    // Check if entry already exists
+    const existingEntry = await this.getLeaderboardEntry(insertEntry.userId);
+    
+    if (existingEntry) {
+      // Update existing entry
+      const updatedEntry: LeaderboardEntry = {
+        ...existingEntry,
+        points: (existingEntry.points || 0) + (insertEntry.points || 0),
+        wins: (existingEntry.wins || 0) + (insertEntry.wins || 0),
+        totalTournaments: (existingEntry.totalTournaments || 0) + (insertEntry.totalTournaments || 0),
+        weeklyPoints: (existingEntry.weeklyPoints || 0) + (insertEntry.weeklyPoints || 0),
+        monthlyPoints: (existingEntry.monthlyPoints || 0) + (insertEntry.monthlyPoints || 0),
+        updatedAt: new Date()
+      };
+      this.leaderboardEntries.set(existingEntry.id, updatedEntry);
+      return updatedEntry;
+    } else {
+      // Create new entry
+      const id = this.leaderboardIdCounter++;
+      const entry: LeaderboardEntry = {
+        ...insertEntry,
+        id,
+        points: insertEntry.points || 0,
+        wins: insertEntry.wins || 0,
+        totalTournaments: insertEntry.totalTournaments || 0,
+        weeklyPoints: insertEntry.weeklyPoints || 0,
+        monthlyPoints: insertEntry.monthlyPoints || 0,
+        updatedAt: new Date()
+      };
+      this.leaderboardEntries.set(id, entry);
+      return entry;
+    }
+  }
+  
+  // Helper method to initialize demo data
+  private async initializeDemoData() {
+    // Create demo user
+    const user = await this.createUser({
+      phoneNumber: "01712345678",
+      nickname: "PlayerGhost",
+      freeFireUID: "123456789",
+      division: "dhaka",
+      avatarUrl: "https://images.unsplash.com/photo-1566753323558-f4e0952af115",
+    });
+    
+    // Create demo tournaments
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const tournamentTypes = ['solo', 'duo', 'squad'];
+    
+    for (let i = 0; i < 6; i++) {
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() + i);
+      
+      const tournament = await this.createTournament({
+        title: ['Weekly Pro Scrims', 'Solo Sniper Challenge', 'Battle Royale Championship', 'Newbie Solo Challenge', 'Dynamic Duo Cup', 'Victory Royale Cup'][i],
+        description: `This is tournament #${i+1}`,
+        entryFee: [100, 50, 200, 0, 100, 100][i],
+        prizePool: [5000, 2000, 15000, 500, 3000, 10000][i],
+        startTime: startDate,
+        maxTeams: [100, 50, 100, 50, 50, 100][i],
+        tournamentType: tournamentTypes[i % 3],
+        status: i < 2 ? 'upcoming' : (i === 2 ? 'live' : 'upcoming'),
+        createdBy: user.id,
+        imageUrl: [
+          "https://images.unsplash.com/photo-1593305841991-05c297ba4575",
+          "https://images.unsplash.com/photo-1560253023-3ec5d502959f",
+          "https://images.unsplash.com/photo-1519326844852-704caea5679e",
+          "https://images.unsplash.com/photo-1493711662062-fa541adb3fc8",
+          "https://images.unsplash.com/photo-1511512578047-dfb367046420",
+          "https://images.unsplash.com/photo-1542751110-97427bbecf20"
+        ][i]
+      });
+      
+      // Add some random registrations
+      const registrations = Math.floor(Math.random() * tournament.maxTeams * 0.5);
+      for (let j = 0; j < registrations; j++) {
+        this.tournaments.set(tournament.id, {
+          ...tournament,
+          registeredTeams: j + 1
+        });
+      }
+    }
+    
+    // Create demo transactions
+    await this.createTransaction({
+      userId: user.id,
+      amount: 200,
+      type: 'tournament_winning',
+      description: 'Tournament Winnings',
+      status: 'completed',
+      paymentMethod: null
+    });
+    
+    await this.createTransaction({
+      userId: user.id,
+      amount: 100,
+      type: 'deposit',
+      description: 'Deposit via bKash',
+      status: 'completed',
+      paymentMethod: 'bKash'
+    });
+    
+    await this.createTransaction({
+      userId: user.id,
+      amount: -50,
+      type: 'tournament_entry',
+      description: 'Tournament Entry',
+      status: 'completed',
+      paymentMethod: null
+    });
+    
+    // Create demo leaderboard entries
+    for (let i = 0; i < 5; i++) {
+      const demoUser = await this.createUser({
+        phoneNumber: `017123456${i+1}`,
+        nickname: ['KillerPro99', 'SnipeKing', 'HeadHunter', 'Destroyer', 'NinjaWarrior'][i],
+        freeFireUID: `${1000000 + i}`,
+        division: "dhaka",
+        avatarUrl: [
+          "https://images.unsplash.com/photo-1566753323558-f4e0952af115",
+          "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61",
+          "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde",
+          "https://images.unsplash.com/photo-1527980965255-d3b416303d12",
+          "https://images.unsplash.com/photo-1599566150163-29194dcaad36"
+        ][i]
+      });
+      
+      await this.createOrUpdateLeaderboardEntry({
+        userId: demoUser.id,
+        points: [8750, 7520, 6890, 5970, 5480][i],
+        wins: Math.floor(Math.random() * 10),
+        totalTournaments: Math.floor(Math.random() * 20) + 10,
+        weeklyPoints: Math.floor(Math.random() * 1000),
+        monthlyPoints: Math.floor(Math.random() * 3000),
+      });
+    }
+    
+    // Update the demo user's leaderboard entry
+    await this.createOrUpdateLeaderboardEntry({
+      userId: user.id,
+      points: 1250,
+      wins: 3,
+      totalTournaments: 12,
+      weeklyPoints: 250,
+      monthlyPoints: 750,
+    });
   }
 }
 

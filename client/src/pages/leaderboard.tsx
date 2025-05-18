@@ -1,186 +1,232 @@
-import { FC, useState } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { useLanguage } from "@/hooks/use-language";
-import { useQuery } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Skeleton } from "@/components/ui/skeleton";
-import LeaderboardCard from "@/components/ui/leaderboard-card";
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useLanguage } from '@/providers/language-provider';
+import { useAuth } from '@/hooks/use-auth';
 
-const LeaderboardPage: FC = () => {
+interface LeaderboardUser {
+  id: number;
+  nickname: string;
+  avatarUrl: string | null;
+}
+
+interface LeaderboardEntry {
+  id: number;
+  userId: number;
+  points: number;
+  wins: number;
+  totalTournaments: number;
+  weeklyPoints: number;
+  monthlyPoints: number;
+  user: LeaderboardUser | null;
+}
+
+export default function Leaderboard() {
   const { t } = useLanguage();
-  const [timePeriod, setTimePeriod] = useState("week");
+  const { user } = useAuth();
+  const [leaderboardType, setLeaderboardType] = useState<string>('overall');
   
   // Fetch leaderboard data
-  const { data: players, isLoading } = useQuery({
-    queryKey: [`/api/leaderboard?timeperiod=${timePeriod}`],
+  const { data: leaderboard, isLoading } = useQuery<LeaderboardEntry[]>({
+    queryKey: ['/api/leaderboard', { type: leaderboardType }],
   });
   
-  const topThreePlayers = players ? players.slice(0, 3) : [];
-  const otherPlayers = players ? players.slice(3) : [];
-
+  // Fetch user's leaderboard entry
+  const { data: userLeaderboard, isLoading: isLoadingUserData } = useQuery<LeaderboardEntry>({
+    queryKey: ['/api/users', user?.id, 'leaderboard'],
+    enabled: !!user?.id,
+  });
+  
+  // Find user's rank
+  const userRank = leaderboard?.findIndex(entry => entry.userId === user?.id) ?? -1;
+  
   return (
-    <main className="pt-16 pb-20">
-      <div className="p-4">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold font-poppins">{t("leaderboard")}</h2>
-          <Select onValueChange={setTimePeriod} defaultValue="week">
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder={t("thisWeek")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">{t("thisWeek")}</SelectItem>
-              <SelectItem value="month">{t("thisMonth")}</SelectItem>
-              <SelectItem value="all">{t("allTime")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {isLoading ? (
-          // Loading skeleton for top 3
-          <div className="flex justify-center items-end mb-10 gap-4">
-            {[2, 1, 3].map((position) => (
-              <div key={position} className="flex flex-col items-center">
-                <Skeleton className={`
-                  rounded-full 
-                  ${position === 1 ? 'w-20 h-20 border-2 border-yellow-500' : 'w-16 h-16 border-2 border-gray-400'}
-                `} />
-                <Skeleton className={`
-                  w-8 h-8 rounded-full -mt-3
-                  ${position === 1 ? 'bg-yellow-500' : position === 2 ? 'bg-gray-400' : 'bg-yellow-700'}
-                `} />
-                <div className="text-center mt-2">
-                  <Skeleton className="h-4 w-24 mb-1" />
-                  <Skeleton className="h-3 w-16 mb-1" />
-                  <Skeleton className="h-5 w-20" />
-                </div>
-                <Skeleton className={`
-                  rounded-t-lg mt-3 w-16
-                  ${position === 1 ? 'h-32' : position === 2 ? 'h-24' : 'h-16'}
-                `} />
-              </div>
-            ))}
+    <div className="p-4 space-y-6">
+      {/* Leaderboard Categories */}
+      <div className="flex items-center space-x-2 overflow-x-auto hide-scrollbar pb-2">
+        <button 
+          onClick={() => setLeaderboardType('overall')}
+          className={`${leaderboardType === 'overall' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('leaderboard.overall')}
+        </button>
+        <button 
+          onClick={() => setLeaderboardType('weekly')}
+          className={`${leaderboardType === 'weekly' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('leaderboard.weekly')}
+        </button>
+        <button 
+          onClick={() => setLeaderboardType('monthly')}
+          className={`${leaderboardType === 'monthly' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('leaderboard.monthly')}
+        </button>
+        <button 
+          onClick={() => setLeaderboardType('tournament')}
+          className={`${leaderboardType === 'tournament' ? 'bg-primary text-white' : 'bg-dark-light text-gray-300'} px-4 py-2 rounded-full text-sm whitespace-nowrap`}
+        >
+          {t('leaderboard.tournament')}
+        </button>
+      </div>
+      
+      {/* Your Ranking */}
+      <div className="bg-secondary rounded-lg p-4">
+        <h3 className="text-lg font-bold font-heading mb-3">{t('leaderboard.yourRanking')}</h3>
+        {isLoadingUserData ? (
+          <div className="flex justify-center py-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
           </div>
-        ) : topThreePlayers.length > 0 ? (
-          // Top 3 Players
-          <div className="flex justify-center items-end mb-10 gap-4">
-            {/* 2nd Place */}
-            {topThreePlayers.length > 1 && (
-              <div className="flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-400">
-                  <Avatar className="w-full h-full">
-                    <AvatarImage src={topThreePlayers[1].avatar} alt={topThreePlayers[1].displayName} />
-                    <AvatarFallback>{topThreePlayers[1].displayName.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                </div>
-                <div className="w-8 h-8 flex items-center justify-center bg-gray-400 text-white rounded-full -mt-3 font-bold">2</div>
-                <div className="text-center mt-2">
-                  <div className="font-medium">{topThreePlayers[1].displayName}</div>
-                  <div className="text-sm text-muted-foreground">{topThreePlayers[1].tournamentWins || 18} Wins</div>
-                  <div className="font-bold font-rajdhani">{topThreePlayers[1].walletBalance} pts</div>
-                </div>
-                <div className="h-24 w-16 rounded-t-lg mt-3 bg-muted"></div>
+        ) : userLeaderboard ? (
+          <div className="flex items-center">
+            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold mr-3">
+              {userRank !== -1 ? userRank + 1 : '?'}
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-white">{user?.nickname}</p>
+              <div className="w-full bg-dark-light rounded-full h-2 mt-1">
+                <div 
+                  className="bg-primary h-2 rounded-full" 
+                  style={{ 
+                    width: `${Math.min(userLeaderboard.points / 100, 100)}%` 
+                  }}
+                ></div>
               </div>
-            )}
-            
-            {/* 1st Place */}
-            {topThreePlayers.length > 0 && (
-              <div className="flex flex-col items-center">
-                <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-yellow-500">
-                  <Avatar className="w-full h-full">
-                    <AvatarImage src={topThreePlayers[0].avatar} alt={topThreePlayers[0].displayName} />
-                    <AvatarFallback>{topThreePlayers[0].displayName.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                </div>
-                <div className="w-8 h-8 flex items-center justify-center bg-yellow-500 text-white rounded-full -mt-3 font-bold">1</div>
-                <div className="text-center mt-2">
-                  <div className="font-medium">{topThreePlayers[0].displayName}</div>
-                  <div className="text-sm text-muted-foreground">{topThreePlayers[0].tournamentWins || 24} Wins</div>
-                  <div className="font-bold font-rajdhani">{topThreePlayers[0].walletBalance} pts</div>
-                </div>
-                <div className="h-32 w-16 rounded-t-lg mt-3 bg-gradient-to-b from-yellow-500 to-yellow-600"></div>
-              </div>
-            )}
-            
-            {/* 3rd Place */}
-            {topThreePlayers.length > 2 && (
-              <div className="flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-yellow-700">
-                  <Avatar className="w-full h-full">
-                    <AvatarImage src={topThreePlayers[2].avatar} alt={topThreePlayers[2].displayName} />
-                    <AvatarFallback>{topThreePlayers[2].displayName.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                </div>
-                <div className="w-8 h-8 flex items-center justify-center bg-yellow-700 text-white rounded-full -mt-3 font-bold">3</div>
-                <div className="text-center mt-2">
-                  <div className="font-medium">{topThreePlayers[2].displayName}</div>
-                  <div className="text-sm text-muted-foreground">{topThreePlayers[2].tournamentWins || 15} Wins</div>
-                  <div className="font-bold font-rajdhani">{topThreePlayers[2].walletBalance} pts</div>
-                </div>
-                <div className="h-16 w-16 rounded-t-lg mt-3 bg-muted"></div>
-              </div>
-            )}
+            </div>
+            <div className="ml-3">
+              <p className="text-accent font-bold">
+                {leaderboardType === 'weekly' 
+                  ? userLeaderboard.weeklyPoints 
+                  : leaderboardType === 'monthly' 
+                    ? userLeaderboard.monthlyPoints 
+                    : userLeaderboard.points} pts
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center w-full py-10 text-muted-foreground mb-10">
-            <i className="ri-trophy-line text-4xl mb-2"></i>
-            <p>{t("noLeaderboardData")}</p>
-          </div>
-        )}
-        
-        {/* Leaderboard List */}
-        <Card className="overflow-hidden shadow-md">
-          <div className="p-4 space-y-4">
-            {isLoading ? (
-              // Loading skeletons for other players
-              Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="flex items-center">
-                  <Skeleton className="w-8 h-8 rounded-full mr-2" />
-                  <Skeleton className="w-10 h-10 rounded-full mr-3" />
-                  <div className="flex-grow">
-                    <Skeleton className="h-4 w-24 mb-1" />
-                    <Skeleton className="h-3 w-32" />
-                  </div>
-                  <Skeleton className="h-5 w-16" />
-                </div>
-              ))
-            ) : otherPlayers && otherPlayers.length > 0 ? (
-              otherPlayers.map((player, index) => (
-                <LeaderboardCard 
-                  key={player.id} 
-                  user={player}
-                  rank={index + 4} // Ranks start at 4 for this list
-                />
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center w-full py-10 text-muted-foreground">
-                <p>{t("noOtherPlayers")}</p>
-              </div>
-            )}
-          </div>
-        </Card>
-        
-        {otherPlayers && otherPlayers.length > 0 && (
-          <div className="mt-6 flex justify-center">
-            <Button 
-              variant="outline" 
-              className="flex items-center justify-center space-x-2"
-            >
-              <span>{t("loadMore")}</span>
-              <i className="ri-arrow-down-line"></i>
-            </Button>
+          <div className="text-center py-4 text-gray-400">
+            {t('leaderboard.noRankingData')}
           </div>
         )}
       </div>
-    </main>
+      
+      {/* Top Players */}
+      <div>
+        <h3 className="text-lg font-bold font-heading mb-3">{t('leaderboard.topPlayers')}</h3>
+        
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        ) : leaderboard && leaderboard.length > 0 ? (
+          <div className="bg-dark-light rounded-lg">
+            {/* Top 3 with special styling */}
+            {leaderboard.length > 0 && (
+              <div className="p-4 flex items-center bg-gradient-to-r from-accent to-amber-600 rounded-t-lg">
+                <div className="w-8 h-8 rounded-full bg-white text-amber-600 flex items-center justify-center font-bold mr-3">
+                  1
+                </div>
+                <div className="flex-1 flex items-center">
+                  <img 
+                    src={leaderboard[0].user?.avatarUrl || "https://images.unsplash.com/photo-1566753323558-f4e0952af115"} 
+                    alt="Top Player" 
+                    className="w-8 h-8 rounded-full mr-2"
+                  />
+                  <p className="font-bold text-white">{leaderboard[0].user?.nickname}</p>
+                </div>
+                <div>
+                  <p className="text-white font-bold">
+                    {leaderboardType === 'weekly' 
+                      ? leaderboard[0].weeklyPoints 
+                      : leaderboardType === 'monthly' 
+                        ? leaderboard[0].monthlyPoints 
+                        : leaderboard[0].points} pts
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {leaderboard.length > 1 && (
+              <div className="p-4 flex items-center">
+                <div className="w-8 h-8 rounded-full bg-gray-300 text-gray-800 flex items-center justify-center font-bold mr-3">
+                  2
+                </div>
+                <div className="flex-1 flex items-center">
+                  <img 
+                    src={leaderboard[1].user?.avatarUrl || "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61"} 
+                    alt="Second Place" 
+                    className="w-8 h-8 rounded-full mr-2"
+                  />
+                  <p className="font-medium text-white">{leaderboard[1].user?.nickname}</p>
+                </div>
+                <div>
+                  <p className="text-accent font-bold">
+                    {leaderboardType === 'weekly' 
+                      ? leaderboard[1].weeklyPoints 
+                      : leaderboardType === 'monthly' 
+                        ? leaderboard[1].monthlyPoints 
+                        : leaderboard[1].points} pts
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {leaderboard.length > 2 && (
+              <div className="p-4 flex items-center">
+                <div className="w-8 h-8 rounded-full bg-amber-700 text-white flex items-center justify-center font-bold mr-3">
+                  3
+                </div>
+                <div className="flex-1 flex items-center">
+                  <img 
+                    src={leaderboard[2].user?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde"} 
+                    alt="Third Place" 
+                    className="w-8 h-8 rounded-full mr-2"
+                  />
+                  <p className="font-medium text-white">{leaderboard[2].user?.nickname}</p>
+                </div>
+                <div>
+                  <p className="text-accent font-bold">
+                    {leaderboardType === 'weekly' 
+                      ? leaderboard[2].weeklyPoints 
+                      : leaderboardType === 'monthly' 
+                        ? leaderboard[2].monthlyPoints 
+                        : leaderboard[2].points} pts
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {/* Rest of the leaderboard */}
+            {leaderboard.slice(3).map((entry, index) => (
+              <div key={entry.id} className="p-4 flex items-center border-t border-gray-700">
+                <div className="w-8 h-8 rounded-full bg-dark-light text-gray-400 flex items-center justify-center font-medium mr-3">
+                  {index + 4}
+                </div>
+                <div className="flex-1 flex items-center">
+                  <img 
+                    src={entry.user?.avatarUrl || `https://images.unsplash.com/photo-1527980965255-d3b416303d12`} 
+                    alt="Player" 
+                    className="w-8 h-8 rounded-full mr-2"
+                  />
+                  <p className="font-medium text-white">{entry.user?.nickname}</p>
+                </div>
+                <div>
+                  <p className="text-accent font-medium">
+                    {leaderboardType === 'weekly' 
+                      ? entry.weeklyPoints 
+                      : leaderboardType === 'monthly' 
+                        ? entry.monthlyPoints 
+                        : entry.points} pts
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-dark-light rounded-lg p-8 text-center text-gray-400">
+            {t('leaderboard.noLeaderboardData')}
+          </div>
+        )}
+      </div>
+    </div>
   );
-};
-
-export default LeaderboardPage;
+}

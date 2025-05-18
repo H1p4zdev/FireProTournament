@@ -1,69 +1,75 @@
 import { Switch, Route } from "wouter";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import HomePage from "@/pages/home";
-import TournamentsPage from "@/pages/tournaments";
-import LeaderboardPage from "@/pages/leaderboard";
-import ProfilePage from "@/pages/profile";
-import MobileNav from "@/components/ui/mobile-nav";
-import { useModals } from "@/hooks/use-modal";
-import LoginModal from "@/components/modals/login-modal";
-import WalletModal from "@/components/modals/wallet-modal";
-import TournamentDetailModal from "@/components/modals/tournament-detail-modal";
-import CreateTournamentModal from "@/components/modals/create-tournament-modal";
-import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { AuthProvider } from "@/hooks/use-auth";
+import { LanguageProvider } from "@/providers/language-provider";
+import { ThemeProvider } from "@/providers/theme-provider";
+import SplashScreen from "@/pages/splash";
+import AuthScreen from "@/pages/auth";
+import CreateProfile from "@/pages/create-profile";
+import Layout from "@/components/layout";
+import Home from "@/pages/home";
+import Tournaments from "@/pages/tournaments";
+import Wallet from "@/pages/wallet";
+import Leaderboard from "@/pages/leaderboard";
+import Profile from "@/pages/profile";
+
+function Router() {
+  return (
+    <Switch>
+      <Route path="/" component={SplashScreen} />
+      <Route path="/auth" component={AuthScreen} />
+      <Route path="/create-profile" component={CreateProfile} />
+      
+      <Route path="/home">
+        <Layout>
+          <Home />
+        </Layout>
+      </Route>
+      
+      <Route path="/tournaments">
+        <Layout>
+          <Tournaments />
+        </Layout>
+      </Route>
+      
+      <Route path="/wallet">
+        <Layout>
+          <Wallet />
+        </Layout>
+      </Route>
+      
+      <Route path="/leaderboard">
+        <Layout>
+          <Leaderboard />
+        </Layout>
+      </Route>
+      
+      <Route path="/profile">
+        <Layout>
+          <Profile />
+        </Layout>
+      </Route>
+      
+      {/* Fallback to 404 */}
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
 
 function App() {
-  const { 
-    loginModalOpen, 
-    walletModalOpen, 
-    selectedTournament, 
-    createTournamentModalOpen
-  } = useModals();
-  
-  const [location, setLocation] = useLocation();
-  
-  // Set document title based on route
-  useEffect(() => {
-    let title = "FireTourney - Mobile Game Tournaments";
-    
-    switch (location) {
-      case "/tournaments":
-        title = "Tournaments - FireTourney";
-        break;
-      case "/leaderboard":
-        title = "Leaderboard - FireTourney";
-        break;
-      case "/profile":
-        title = "My Profile - FireTourney";
-        break;
-    }
-    
-    document.title = title;
-  }, [location]);
-
   return (
-    <TooltipProvider>
-      <Switch>
-        <Route path="/" component={HomePage} />
-        <Route path="/tournaments" component={TournamentsPage} />
-        <Route path="/leaderboard" component={LeaderboardPage} />
-        <Route path="/profile" component={ProfilePage} />
-        <Route component={NotFound} />
-      </Switch>
-      
-      <MobileNav />
-      
-      {/* Modals */}
-      <LoginModal open={loginModalOpen} />
-      <WalletModal open={walletModalOpen} />
-      <TournamentDetailModal 
-        open={!!selectedTournament} 
-        tournament={selectedTournament} 
-      />
-      <CreateTournamentModal open={createTournamentModalOpen} />
-    </TooltipProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <Toaster />
+          <Router />
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
   );
 }
 
