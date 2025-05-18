@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/use-auth";
 import { LanguageProvider } from "@/providers/language-provider";
-import { ThemeProvider } from "@/providers/theme-provider";
 import SplashScreen from "@/pages/splash";
 import AuthScreen from "@/pages/auth";
 import CreateProfile from "@/pages/create-profile";
