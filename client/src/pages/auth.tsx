@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-// Remove language import until we implement it properly
+import { Phone } from 'lucide-react';
 
 export default function AuthScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -10,34 +10,22 @@ export default function AuthScreen() {
   const [otpSent, setOtpSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { login } = useAuth();
+  const { loginWithPhone, verifyOtp } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   
-  const handleGetOTP = () => {
-    if (!phoneNumber || phoneNumber.length < 10) {
-      toast({
-        title: "Invalid Phone Number",
-        description: "Please enter a valid phone number",
-        variant: "destructive"
-      });
-      return;
+  const handleGetOTP = async () => {
+    // Make sure the phone number is formatted correctly (+880 for Bangladesh)
+    let formattedPhone = phoneNumber;
+    if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
     }
     
-    // In a real app, we'd call an API to send OTP
-    // For this implementation, we'll just show the OTP field
-    setOtpSent(true);
-    toast({
-      title: "OTP Sent",
-      description: "A verification code has been sent to your phone"
-    });
-  };
-  
-  const handleLogin = async () => {
-    if (!phoneNumber || !otp) {
+    // Basic validation
+    if (!formattedPhone || formattedPhone.length < 10) {
       toast({
-        title: "Missing Information",
-        description: "Please enter your phone number and OTP",
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number with country code (e.g. +8801XXXXXXXXX)",
         variant: "destructive"
       });
       return;
@@ -46,19 +34,56 @@ export default function AuthScreen() {
     setIsSubmitting(true);
     
     try {
-      // In a real implementation, we would call the login API
-      // For now, we'll simulate login by navigating directly
-      setTimeout(() => {
-        // Direct to home for demo purposes
-        navigate('/home');
-      }, 1000);
+      // Call Firebase phone authentication
+      const result = await loginWithPhone(formattedPhone);
+      
+      if (result.success) {
+        setOtpSent(true);
+        toast({
+          title: "OTP Sent",
+          description: "A verification code has been sent to your phone"
+        });
+      }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Error sending OTP:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const handleVerifyOTP = async () => {
+    if (!otp || otp.length < 4) {
       toast({
-        title: "Login Failed",
-        description: "Please check your credentials and try again",
+        title: "Invalid OTP",
+        description: "Please enter the verification code you received",
         variant: "destructive"
       });
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Verify OTP with Firebase
+      const result = await verifyOtp(otp);
+      
+      if (result.success) {
+        if (result.isNewUser) {
+          // New user - redirect to profile creation
+          navigate('/create-profile');
+        } else {
+          // Existing user - redirect to home
+          navigate('/home');
+        }
+      } else {
+        toast({
+          title: "Verification Failed",
+          description: "Invalid verification code. Please try again.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -78,14 +103,14 @@ export default function AuthScreen() {
       <div className="w-full max-w-md space-y-4">
         <div className="relative">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-            <i className="ri-smartphone-line text-gray-400"></i>
+            <Phone className="h-5 w-5 text-gray-400" />
           </span>
           <input 
             type="tel" 
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
             className="w-full pl-10 pr-4 py-3 bg-dark-light border border-gray-600 rounded-lg focus:outline-none focus:border-primary" 
-            placeholder="Phone Number"
+            placeholder="Phone Number (+8801XXXXXXXXX)"
           />
         </div>
         
@@ -113,11 +138,11 @@ export default function AuthScreen() {
             </div>
             
             <button 
-              onClick={handleLogin}
+              onClick={handleVerifyOTP}
               disabled={isSubmitting}
               className={`w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-opacity-90 transition ${isSubmitting ? 'bg-opacity-70 cursor-not-allowed' : ''}`}
             >
-              {isSubmitting ? "Loading..." : "Verify"}
+              {isSubmitting ? "Verifying..." : "Verify"}
             </button>
           </>
         )}
@@ -129,10 +154,10 @@ export default function AuthScreen() {
         </div>
         
         <div className="flex space-x-4">
-          <button className="flex-1 py-3 bg-[#4267B2] text-white rounded-lg font-medium hover:bg-opacity-90 transition flex items-center justify-center">
+          <button className="flex-1 py-3 bg-[#4267B2] text-white rounded-lg font-medium hover:bg-opacity-90 transition flex items-center justify-center" disabled>
             <i className="ri-facebook-fill mr-2"></i> Login with Facebook
           </button>
-          <button className="flex-1 py-3 bg-[#DB4437] text-white rounded-lg font-medium hover:bg-opacity-90 transition flex items-center justify-center">
+          <button className="flex-1 py-3 bg-[#DB4437] text-white rounded-lg font-medium hover:bg-opacity-90 transition flex items-center justify-center" disabled>
             <i className="ri-google-fill mr-2"></i> Login with Google
           </button>
         </div>
@@ -141,6 +166,9 @@ export default function AuthScreen() {
       <div className="mt-8 text-sm text-gray-400 text-center">
         By continuing, you agree to our <a href="#" className="text-primary">Terms of Service</a> and <a href="#" className="text-primary">Privacy Policy</a>
       </div>
+      
+      {/* Hidden recaptcha container for Firebase phone auth */}
+      <div id="recaptcha-container"></div>
     </div>
   );
 }
