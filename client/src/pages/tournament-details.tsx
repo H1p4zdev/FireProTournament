@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { doc, getDoc, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { db, AuthContext } from '../App';
+import { db } from '../App';
+import { useAuth } from '@/hooks/use-auth-mock';
 import { useToast } from '@/hooks/use-toast';
 import { Calendar, Clock, Users, Award, DollarSign, Info, ChevronLeft, Trophy } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
