@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { useLocation } from 'wouter';
-import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { Phone } from 'lucide-react';
+import { Phone, Lock } from 'lucide-react';
+import { AuthContext, auth } from '../App';
+import { RecaptchaVerifier, PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
+import { getDoc, doc, setDoc } from 'firebase/firestore';
+import { db } from '../App';
 
 export default function AuthScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -10,9 +13,25 @@ export default function AuthScreen() {
   const [otpSent, setOtpSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { loginWithPhone, verifyOtp } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const [verificationId, setVerificationId] = useState('');
+  
+  // Initialize recaptcha verifier
+  const setupRecaptcha = () => {
+    if (!(window as any).recaptchaVerifier) {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => {
+          console.log('Recaptcha verified');
+        },
+        'expired-callback': () => {
+          console.log('Recaptcha expired');
+        }
+      });
+    }
+    return (window as any).recaptchaVerifier;
+  };
   
   const handleGetOTP = async () => {
     // Make sure the phone number is formatted correctly (+880 for Bangladesh)
@@ -34,18 +53,23 @@ export default function AuthScreen() {
     setIsSubmitting(true);
     
     try {
-      // Call Firebase phone authentication
-      const result = await loginWithPhone(formattedPhone);
+      const appVerifier = setupRecaptcha();
+      const provider = new PhoneAuthProvider(auth);
+      const verificationId = await provider.verifyPhoneNumber(formattedPhone, appVerifier);
+      setVerificationId(verificationId);
       
-      if (result.success) {
-        setOtpSent(true);
-        toast({
-          title: "OTP Sent",
-          description: "A verification code has been sent to your phone"
-        });
-      }
-    } catch (error) {
-      console.error('Error sending OTP:', error);
+      setOtpSent(true);
+      toast({
+        title: "OTP Sent",
+        description: "A verification code has been sent to your phone"
+      });
+    } catch (error: any) {
+      console.error('Error sending verification code:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send verification code",
+        variant: "destructive"
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -61,29 +85,38 @@ export default function AuthScreen() {
       return;
     }
     
+    if (!verificationId) {
+      toast({
+        title: "Error",
+        description: "Phone verification not initiated",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      // Verify OTP with Firebase
-      const result = await verifyOtp(otp);
+      const credential = PhoneAuthProvider.credential(verificationId, otp);
+      const result = await signInWithCredential(auth, credential);
       
-      if (result.success) {
-        if (result.isNewUser) {
-          // New user - redirect to profile creation
-          navigate('/create-profile');
-        } else {
-          // Existing user - redirect to home
-          navigate('/home');
-        }
+      // Check if this is a new user by looking for their profile
+      const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+      
+      if (!userDoc.exists()) {
+        // This is a new user - redirect to profile creation
+        navigate('/create-profile');
       } else {
-        toast({
-          title: "Verification Failed",
-          description: "Invalid verification code. Please try again.",
-          variant: "destructive"
-        });
+        // Existing user - redirect to home
+        navigate('/home');
       }
-    } catch (error) {
-      console.error('Verification error:', error);
+    } catch (error: any) {
+      console.error('Error verifying OTP:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Invalid verification code",
+        variant: "destructive"
+      });
     } finally {
       setIsSubmitting(false);
     }

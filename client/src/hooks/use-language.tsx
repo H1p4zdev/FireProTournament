@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { translations, Language } from '../translations';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { translations, Language } from '@/translations';
 
 interface LanguageContextType {
   language: Language;
@@ -9,13 +9,10 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export function LanguageProvider({ 
-  children, 
-  defaultLanguage = 'en' 
-}: { 
+export function LanguageProvider({ children, defaultLanguage = 'en' }: { 
   children: ReactNode; 
   defaultLanguage?: Language 
-}) {
+}): JSX.Element {
   const [language, setLanguageState] = useState<Language>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('language') as Language | null;
@@ -39,14 +36,10 @@ export function LanguageProvider({
     try {
       // Split the key by dots to access nested properties
       const keyParts = key.split('.');
-      let translation: any = translations[language];
+      let translation = translations[language];
       
       for (const part of keyParts) {
-        if (translation && translation[part]) {
-          translation = translation[part];
-        } else {
-          return key; // Key not found
-        }
+        translation = translation[part];
       }
       
       return translation || key;

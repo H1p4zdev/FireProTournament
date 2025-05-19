@@ -1,30 +1,166 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useContext } from 'react';
 import TournamentCard from '@/components/tournament-card';
-import { useLanguage } from '@/providers/language-provider';
-import { useTheme } from '@/providers/theme-provider';
-import { Tournament } from '@shared/schema';
-import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/utils';
+import { collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { db, auth, AuthContext } from '../App';
+
+// Define Tournament interface for Firebase data
+interface Tournament {
+  id: string;
+  title: string;
+  description: string;
+  prizePool: number;
+  entryFee: number;
+  startTime: Timestamp | Date;
+  endTime: Timestamp | Date;
+  maxTeams: number;
+  registeredTeams: number;
+  status: 'upcoming' | 'live' | 'completed';
+  tournamentType: string;
+  createdBy: string;
+  imageUrl?: string;
+  createdAt: Timestamp | Date;
+}
+
+// Define LeaderboardEntry interface for Firebase data
+interface LeaderboardEntry {
+  id: string;
+  userId: string;
+  points: number;
+  wins: number;
+  totalTournaments: number;
+  user?: {
+    nickname: string;
+    avatarUrl?: string;
+  };
+}
 
 export default function Home() {
-  const { t, language, setLanguage } = useLanguage();
-  const { theme, setTheme } = useTheme();
-  const { user } = useAuth();
+  // Using Firebase directly from App.tsx exports
+  const [language, setLanguage] = useState('en');
+  const [theme, setTheme] = useState('dark');
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
+  const userData = authContext?.userData;
   
-  // Fetch tournaments
-  const { data: upcomingTournaments, isLoading: isLoadingUpcoming } = useQuery<Tournament[]>({
-    queryKey: ['/api/tournaments', { status: 'upcoming' }],
-  });
+  // Simple translation function for demo
+  const t = (key: string) => {
+    const parts = key.split('.');
+    // Simple fallback to just return the last part of the key
+    return parts[parts.length - 1];
+  };
   
-  const { data: liveTournaments, isLoading: isLoadingLive } = useQuery<Tournament[]>({
-    queryKey: ['/api/tournaments', { status: 'live' }],
-  });
+  const [upcomingTournaments, setUpcomingTournaments] = useState<Tournament[]>([]);
+  const [liveTournaments, setLiveTournaments] = useState<Tournament[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [isLoadingUpcoming, setIsLoadingUpcoming] = useState(true);
+  const [isLoadingLive, setIsLoadingLive] = useState(true);
+  const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true);
   
-  // Fetch leaderboard for recent winners
-  const { data: leaderboard, isLoading: isLoadingLeaderboard } = useQuery({
-    queryKey: ['/api/leaderboard'],
-  });
+  // Fetch tournaments from Firebase
+  useEffect(() => {
+    const fetchTournaments = async () => {
+      try {
+        // Fetch upcoming tournaments
+        const upcomingQuery = query(
+          collection(db, 'tournaments'),
+          where('status', '==', 'upcoming'),
+          orderBy('startTime', 'asc'),
+          limit(3)
+        );
+        
+        const upcomingSnapshot = await getDocs(upcomingQuery);
+        const upcomingData = upcomingSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Tournament[];
+        
+        setUpcomingTournaments(upcomingData);
+        setIsLoadingUpcoming(false);
+        
+        // Fetch live tournaments
+        const liveQuery = query(
+          collection(db, 'tournaments'),
+          where('status', '==', 'live'),
+          orderBy('startTime', 'desc'),
+          limit(2)
+        );
+        
+        const liveSnapshot = await getDocs(liveQuery);
+        const liveData = liveSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Tournament[];
+        
+        setLiveTournaments(liveData);
+        setIsLoadingLive(false);
+        
+      } catch (error) {
+        console.error("Error fetching tournaments:", error);
+        setIsLoadingUpcoming(false);
+        setIsLoadingLive(false);
+      }
+    };
+    
+    fetchTournaments();
+  }, []);
+  
+  // Fetch leaderboard from Firebase
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const leaderboardQuery = query(
+          collection(db, 'leaderboard'),
+          orderBy('points', 'desc'),
+          limit(5)
+        );
+        
+        const leaderboardSnapshot = await getDocs(leaderboardQuery);
+        const leaderboardData = leaderboardSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as LeaderboardEntry[];
+        
+        // For each leaderboard entry, fetch the user data
+        const leaderboardWithUsers = await Promise.all(
+          leaderboardData.map(async (entry) => {
+            if (!entry.userId) return entry;
+            
+            try {
+              const userDoc = await getDocs(
+                query(collection(db, 'users'), where('uid', '==', entry.userId))
+              );
+              
+              if (!userDoc.empty) {
+                const userData = userDoc.docs[0].data();
+                return {
+                  ...entry,
+                  user: {
+                    nickname: userData.nickname,
+                    avatarUrl: userData.avatarUrl
+                  }
+                };
+              }
+              
+              return entry;
+            } catch (error) {
+              console.error("Error fetching user data for leaderboard:", error);
+              return entry;
+            }
+          })
+        );
+        
+        setLeaderboard(leaderboardWithUsers);
+        setIsLoadingLeaderboard(false);
+        
+      } catch (error) {
+        console.error("Error fetching leaderboard:", error);
+        setIsLoadingLeaderboard(false);
+      }
+    };
+    
+    fetchLeaderboard();
+  }, []);
   
   return (
     <div className="p-4 space-y-6">
