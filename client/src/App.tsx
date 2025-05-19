@@ -2,6 +2,7 @@ import React, { useState, useEffect, createContext } from "react";
 import { Switch, Route } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { LanguageProvider } from "@/providers/language-provider";
 import NotFound from "@/pages/not-found";
 import SplashScreen from "@/pages/splash";
 import AuthScreen from "@/pages/auth";
@@ -41,6 +42,7 @@ export const AuthContext = createContext<{
   user: User | null;
   userData: any | null;
   loading: boolean;
+  refreshUserData?: () => Promise<void>;
 }>({
   user: null,
   userData: null,
@@ -101,6 +103,22 @@ function App() {
   const [userData, setUserData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Function to refresh user data from Firestore
+  const refreshUserData = async (): Promise<void> => {
+    if (!user) return;
+    
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (userDoc.exists()) {
+        setUserData(userDoc.data());
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -130,9 +148,11 @@ function App() {
 
   return (
     <TooltipProvider>
-      <AuthContext.Provider value={{ user, userData, loading }}>
-        <Toaster />
-        <Router />
+      <AuthContext.Provider value={{ user, userData, loading, refreshUserData }}>
+        <LanguageProvider defaultLanguage="en">
+          <Toaster />
+          <Router />
+        </LanguageProvider>
       </AuthContext.Provider>
     </TooltipProvider>
   );
