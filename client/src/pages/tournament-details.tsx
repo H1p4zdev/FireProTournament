@@ -3,7 +3,7 @@ import { useParams, useLocation } from 'wouter';
 import { doc, getDoc, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db, AuthContext } from '../App';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, Clock, Users, Award, DollarSign, Info, ChevronLeft } from 'lucide-react';
+import { Calendar, Clock, Users, Award, DollarSign, Info, ChevronLeft, Trophy } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import TeamRegistrationModal from '@/components/modals/team-registration-modal';
 

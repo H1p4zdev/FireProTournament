@@ -9,6 +9,8 @@ import CreateProfile from "@/pages/create-profile";
 import Layout from "@/components/layout";
 import Home from "@/pages/home";
 import Tournaments from "@/pages/tournaments";
+import TournamentFirebase from "@/pages/tournaments-firebase";
+import TournamentDetails from "@/pages/tournament-details";
 import Wallet from "@/pages/wallet";
 import Leaderboard from "@/pages/leaderboard";
 import Profile from "@/pages/profile";
@@ -60,7 +62,13 @@ function Router() {
       
       <Route path="/tournaments">
         <Layout>
-          <Tournaments />
+          <TournamentFirebase />
+        </Layout>
+      </Route>
+      
+      <Route path="/tournament/:id">
+        <Layout>
+          <TournamentDetails />
         </Layout>
       </Route>
       
