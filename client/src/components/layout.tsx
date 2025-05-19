@@ -1,8 +1,8 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { useLanguage } from '@/providers/language-provider';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/utils';
+import { mockTranslations } from '@/translations/mock';
 
 interface LayoutProps {
   children: ReactNode;

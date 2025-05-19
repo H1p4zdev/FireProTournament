@@ -149,10 +149,8 @@ function App() {
   return (
     <TooltipProvider>
       <AuthContext.Provider value={{ user, userData, loading, refreshUserData }}>
-        <LanguageProvider defaultLanguage="en">
-          <Toaster />
-          <Router />
-        </LanguageProvider>
+        <Toaster />
+        <Router />
       </AuthContext.Provider>
     </TooltipProvider>
   );
