@@ -1,33 +1,32 @@
-import { FC } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { useModals } from "@/hooks/use-modal";
-import { useLanguage } from "@/hooks/use-language";
-import TournamentForm from "@/components/forms/tournament-form";
+import React from 'react';
+import { X } from 'lucide-react';
+import TournamentForm from '../forms/tournament-form';
 
 interface CreateTournamentModalProps {
-  open: boolean;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-const CreateTournamentModal: FC<CreateTournamentModalProps> = ({ open }) => {
-  const { closeCreateTournamentModal } = useModals();
-  const { t } = useLanguage();
-
+export default function CreateTournamentModal({ isOpen, onClose }: CreateTournamentModalProps) {
+  if (!isOpen) return null;
+  
   return (
-    <Dialog open={open} onOpenChange={closeCreateTournamentModal}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{t("createTournament")}</DialogTitle>
-        </DialogHeader>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-dark-light rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <h2 className="text-xl font-bold">Create Tournament</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-white"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
         
-        <TournamentForm onSuccess={closeCreateTournamentModal} />
-      </DialogContent>
-    </Dialog>
+        <div className="p-6">
+          <TournamentForm onSuccess={onClose} />
+        </div>
+      </div>
+    </div>
   );
-};
-
-export default CreateTournamentModal;
+}
